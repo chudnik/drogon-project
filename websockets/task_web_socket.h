@@ -24,9 +24,9 @@ class TaskWebSocket : public WebSocketController<TaskWebSocket> {  // обесп
         // автоматическое удаление
     }
 
-    WS_PATH_LIST_BEGIN                                     // макрос для определения маршрутов WebSocket
-        WS_PATH_ADD("/ws/tasks", "drogon::TaskWebSocket")  // добавление маршрута /ws/tasks и связывание с контроллером TaskWebSocket
-        WS_PATH_LIST_END
+    WS_PATH_LIST_BEGIN                                      // макрос для определения маршрутов WebSocket
+        WS_PATH_ADD("/ws/tasks", "drogon::TaskWebSocket");  // добавление маршрута /ws/tasks и связывание с контроллером TaskWebSocket
+    WS_PATH_LIST_END
 };
 
 inline void BroadcastTasks() {
