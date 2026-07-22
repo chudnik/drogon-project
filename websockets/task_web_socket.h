@@ -10,44 +10,37 @@
 
 using namespace drogon;
 
-class TaskWebSocket : public WebSocketController<TaskWebSocket> {  // обеспечивает автоматическую регистрацию и управление соединениями
+class TaskWebSocket : public WebSocketController<TaskWebSocket> {
    public:
-    // conn - умный указатель на объект соединения
-    // message - сообщение, rvalue ссылка, можно забрать без копирования
-    // type - тип сообщения (текстовое, бинарное, ...)
-    void handleNewMessage(const WebSocketConnectionPtr& conn, std::string&& message,
-                          const WebSocketMessageType& type) override {  // обработчик входящего сообщения от клиента
-        conn->send("pong");                                             // отправляем обратно подтверждение получения сообщения
+    TaskWebSocket() = default;
+
+    void handleNewMessage(const WebSocketConnectionPtr& conn, std::string&& message, const WebSocketMessageType& type) override {
+        conn->send("pong");
     }
 
-    void handleConnectionClosed(const WebSocketConnectionPtr& conn) override {  // обработчик закрытия соединения
-        // автоматическое удаление
-    }
+    void handleConnectionClosed(const WebSocketConnectionPtr& conn) override {}
 
-    WS_PATH_LIST_BEGIN                                      // макрос для определения маршрутов WebSocket
-        WS_PATH_ADD("/ws/tasks", "drogon::TaskWebSocket");  // добавление маршрута /ws/tasks и связывание с контроллером TaskWebSocket
+    WS_PATH_LIST_BEGIN
+    WS_PATH_ADD("/ws/tasks", "drogon::TaskWebSocket");
     WS_PATH_LIST_END
 };
 
 inline void BroadcastTasks() {
-    auto db = app().getDbClient();                   // получение клиента бд по умолчанию
-    auto mapper = db->mapper<drogon_model::Task>();  // маппер для модели из models/task.h
-    mapper.findAll(                                  // ассинхронно запрашиваем все записи из tasks
-        [] std::vector<drogon_model::Task> tasks {   // первый callback принимает вектор задач
-            Json::Value json(Json::arrayValue);      // создаем JSON значение типа массив
-            for (auto& t : tasks) {                  // заполение JSON значения
+    auto db = app().getDbClient();
+    drogon::orm::Mapper<drogon_model::Task> mapper(db);
+
+    mapper.findAll(
+        [](std::vector<drogon_model::Task> tasks) {
+            Json::Value json(Json::arrayValue);
+            for (auto& t : tasks) {
                 Json::Value item;
                 item["id"] = t.id;
                 item["title"] = t.title;
                 item["completed"] = t.completed;
                 json.append(item);
             }
-            auto curl = app().getWebSocketController<TaskWebSocket>();  // получаем указатель на зарегестированный WebSocket контроллер
-            if (curl) {  // если контроллер найден то отправляем JSON строку всем активным соеднинениям
-                curl->getConnections().foreach ([&](const WebSocketConnectionPtr& conn) { conn->send(json.toStyledString()); });
-            }
+            auto& connections = TaskWebSocket::getConnections();
+            connections.foreach ([&](const WebSocketConnectionPtr& conn) { conn->send(json.toStyledString()); });
         },
-        [](const DrogonDbException& e) {  // второй callback(ошибка), логируем через логгер Drogon
-            LOG_ERROR << "DB error in broadcast: " << e.base().what();
-        });
+        [](const drogon::orm::DrogonDbException& e) { LOG_ERROR << "DB error in broadcast: " << e.base().what(); });
 }
