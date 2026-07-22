@@ -27,7 +27,7 @@
     },
     "plugins":[
         {
-            "name": "RequstTimePlugin",
+            "name": "RequestTimerPlugin",
             "config": {}
         }
     ]
