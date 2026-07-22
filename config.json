@@ -12,11 +12,11 @@
             "filename": ":memory:",
             "name": "default",
             "is_fast": true,
-            "connerction_number": 1
+            "connection_number": 1
         }
     ],
     "app": {
-        "documnt_root": "./static",
+        "document_root": "./static",
         "static_file_headers": [
             {"name":"Cache-Control", "value":"public, max-age=86400"}
         ]
