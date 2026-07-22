@@ -1,25 +1,19 @@
-#pragma once  // защита от повторного включения файла
-
-#include <drogon/orm/DbClient.h>  // клиент БД
-#include <drogon/orm/Mapper.h>    // Шаблонный класс для CRUD операций
+#pragma once
+#include <drogon/orm/Model.h>
 
 #include <string>
 
 namespace drogon_model {
-struct Task {               // имя таблицы автоатически опредляется из имени структруры (Task -> tasks)
-    int id{};               // INTEGER
-    std::string title;      // TEXT
-    bool completed{false};  // INTEGER (0/1)
+class Task : public drogon::orm::Model<Task> {
+   public:
+    static constexpr auto kPrimaryKeyName = "id";
 
-    static constexpr auto kPrimaryKey = &Task::id;
+    int id{};
+    std::string title;
+    bool completed{false};
+
+    static const std::string tableName;
 };
-}  // namespace drogon_model
 
-namespace drogon {
-namespace orm {
-template <>
-inline Mapper<drogon_model::Task> DbClient::mapper<drogon_model::Task>() {
-    return Mapper<drogon_model::Task>(*this);  // создание экземпляра Mapper для Task передавая текущий объект DbClient
-}
-}  // namespace orm
-}  // namespace drogon
+const std::string Task::tableName = "tasks";
+}  // namespace drogon_model
