@@ -1,46 +1,42 @@
 #pragma once
 
 #include <drogon/WebSocketController.h>
-#include <drogon/orm/DbClient.h>
-#include <drogon/orm/Mapper.h>
-
-#include <memory>
+#include <mutex>
+#include <unordered_set>
 
 #include "models/task.h"
 
 using namespace drogon;
 
+inline std::mutex connectionsMutex;
+inline std::unordered_set<WebSocketConnectionPtr> connections;
+
 class TaskWebSocket : public WebSocketController<TaskWebSocket> {
    public:
-    TaskWebSocket() = default;
-
-    void handleNewMessage(const WebSocketConnectionPtr& conn, std::string&& message, const WebSocketMessageType& type) override {
-        conn->send("pong");
+    void handleNewMessage(const WebSocketConnectionPtr& conn, std::string&& message,
+                          const WebSocketMessageType&) override {
+        if (message == "ping") conn->send("pong");
     }
-
-    void handleConnectionClosed(const WebSocketConnectionPtr& conn) override {}
-
+    void handleNewConnection(const HttpRequestPtr&, const WebSocketConnectionPtr& conn) override {
+        std::lock_guard<std::mutex> lock(connectionsMutex);
+        connections.insert(conn);
+    }
+    void handleConnectionClosed(const WebSocketConnectionPtr& conn) override {
+        std::lock_guard<std::mutex> lock(connectionsMutex);
+        connections.erase(conn);
+    }
     WS_PATH_LIST_BEGIN
-    WS_PATH_ADD("/ws/tasks", "drogon::TaskWebSocket");
+    WS_PATH_ADD("/ws/tasks");
     WS_PATH_LIST_END
 };
 
 inline void BroadcastTasks() {
-    auto db = app().getDbClient();
-    drogon::orm::Mapper<drogon_model::Task> mapper(db);
-
-    mapper.findAll(
-        [](std::vector<drogon_model::Task> tasks) {
-            Json::Value json(Json::arrayValue);
-            for (auto& t : tasks) {
-                Json::Value item;
-                item["id"] = t.id;
-                item["title"] = t.title;
-                item["completed"] = t.completed;
-                json.append(item);
-            }
-            auto& connections = TaskWebSocket::getConnections();
-            connections.foreach ([&](const WebSocketConnectionPtr& conn) { conn->send(json.toStyledString()); });
-        },
-        [](const drogon::orm::DrogonDbException& e) { LOG_ERROR << "DB error in broadcast: " << e.base().what(); });
+    Json::Value json(Json::arrayValue);
+    {
+        std::lock_guard<std::mutex> lock(task_store::mutex);
+        for (const auto& task : task_store::tasks) json.append(task.toJson());
+    }
+    const auto message = json.toStyledString();
+    std::lock_guard<std::mutex> lock(connectionsMutex);
+    for (const auto& connection : connections) connection->send(message);
 }

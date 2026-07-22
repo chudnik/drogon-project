@@ -1,20 +1,26 @@
 #pragma once
 
-#include <drogon/orm/Model.h>
-
+#include <json/json.h>
+#include <mutex>
 #include <string>
+#include <vector>
 
-namespace drogon_model {
-class Task : public drogon::orm::Model<Task> {
-   public:
-    static constexpr auto kPrimaryKeyName = "id";
-
+struct Task {
     int id{};
     std::string title;
-    bool completed{false};
+    bool completed{};
 
-    static const std::string tableName;
+    Json::Value toJson() const {
+        Json::Value json;
+        json["id"] = id;
+        json["title"] = title;
+        json["completed"] = completed;
+        return json;
+    }
 };
 
-const std::string Task::tableName = "tasks";
-}  // namespace drogon_model
+namespace task_store {
+inline std::mutex mutex;
+inline std::vector<Task> tasks;
+inline int nextId = 1;
+}  // namespace task_store

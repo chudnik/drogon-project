@@ -8,6 +8,9 @@
 using namespace drogon;
 
 int main() {
+    // Touch reflected types so this header-only demo registers them in Drogon.
+    (void)ApiKeyFilter::classTypeName();
+    (void)RequestTimerPlugin::classTypeName();
     app().loadConfigFile("config.json");
     LOG_INFO << "Server starting on http://0.0.0.0:8080";
     app().run();

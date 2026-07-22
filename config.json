@@ -6,15 +6,6 @@
       "https": false
     }
   ],
-  "db_clients": [
-    {
-      "rdbms": "sqlite3",
-      "filename": ":memory:",
-      "name": "default",
-      "is_fast": true,
-      "connection_number": 1
-    }
-  ],
   "app": {
     "document_root": "./static",
     "static_file_headers": [
@@ -22,5 +13,11 @@
     ]
   },
   "threads_num": 4,
-  "plugins": []
+  "plugins": [
+    {
+      "name": "RequestTimerPlugin",
+      "dependencies": [],
+      "config": {}
+    }
+  ]
 }
