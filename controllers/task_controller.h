@@ -6,24 +6,24 @@
 
 #include "filters/api_key_filter.h"
 #include "models/task.h"
-#include "websockets/task_websocket.h"
+#include "websockets/task_web_socket.h"
 
 using namespace drogon;
 
-class TaskController : public HttpController<TaskController> {  // обеспечивает регистрацию маршрутов через макросы
+class TaskController : public HttpController<TaskController> {
    public:
-    METHOD_LIST_BEGIN  // макрос для определения маршрутов HTTP, разворачивается в статические структуры
-        ADD_METHOD_TO(TaskController::getTasks, "api/tasks", Get, "ApiKeyFilter");  // фильтр приминяется перед вызовом метода
-    ADD_METHOD_TO(TaskController::addTask, "api/tasks", Post, "ApiKeyFilter");
+    METHOD_LIST_BEGIN
+    ADD_METHOD_TO(TaskController::getTasks, "/api/tasks", Get, "ApiKeyFilter");
+    ADD_METHOD_TO(TaskController::addTask, "/api/tasks", Post, "ApiKeyFilter");
     ADD_METHOD_TO(TaskController::updateTask, "/api/tasks/{id}", Put, "ApiKeyFilter");
     ADD_METHOD_TO(TaskController::deleteTask, "/api/tasks/{id}", Delete, "ApiKeyFilter");
     METHOD_LIST_END
 
-    // callback — функция, которую мы обязаны вызвать с готовым ответом
-    void getTasks(const HttpRequestPtr& req, std::function<void(HttpRequestPtr)>&& callback) {
-        auto db = app().getdbClient();                   // получаем клиент бд по умолчанию
-        auto mapper = db->mapper<drogon_model::Task>();  // создаем маппер для модели Task из models/task.h
-        mapper.findAll(                                  // ассинхронный запрос всех задач
+    void getTasks(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
+        auto db = app().getDbClient();
+        drogon::orm::Mapper<drogon_model::Task> mapper(db);
+
+        mapper.findAll(
             [callback = std::move(callback)](std::vector<drogon_model::Task> tasks) {
                 Json::Value json(Json::arrayValue);
                 for (auto& t : tasks) {
@@ -33,12 +33,10 @@ class TaskController : public HttpController<TaskController> {  // обеспе�
                     item["completed"] = t.completed;
                     json.append(item);
                 }
-                auto resp =
-                    HttpResponse::newHttpJsonResponse(json);  // создаем ответ, автоматически устанавливая Content-Type: application/json
-
-                callback(resp);  // отправляем ответ клиенту
+                auto resp = HttpResponse::newHttpJsonResponse(json);
+                callback(resp);
             },
-            [callback](const DrogonDbException& e) {
+            [callback](const drogon::orm::DrogonDbException& e) {
                 auto resp = HttpResponse::newHttpResponse();
                 resp->setStatusCode(k500InternalServerError);
                 resp->setBody(e.base().what());
@@ -48,22 +46,25 @@ class TaskController : public HttpController<TaskController> {  // обеспе�
 
     void addTask(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
         auto json = req->getJsonObject();
-        if (!json || !(*json)["title"].isString()) {  // проверяем, что JSON объект существует и содержит строковое поле title
+        if (!json || !(*json)["title"].isString()) {
             auto resp = HttpResponse::newHttpResponse();
             resp->setStatusCode(k400BadRequest);
             resp->setBody("Missing 'title'");
             callback(resp);
             return;
         }
+
         drogon_model::Task task;
         task.title = (*json)["title"].asString();
         task.completed = (*json).get("completed", false).asBool();
+
         auto db = app().getDbClient();
-        auto mapper = db->mapper<drogon_model::Task>();
+        drogon::orm::Mapper<drogon_model::Task> mapper(db);
+
         mapper.insert(
             task,
             [callback](drogon_model::Task newTask) {
-                broadcastTasks();  // оповещаем WS-клиентов
+                BroadcastTasks();
                 Json::Value item;
                 item["id"] = newTask.id;
                 item["title"] = newTask.title;
@@ -72,7 +73,7 @@ class TaskController : public HttpController<TaskController> {  // обеспе�
                 resp->setStatusCode(k201Created);
                 callback(resp);
             },
-            [callback](const DrogonDbException& e) {
+            [callback](const drogon::orm::DrogonDbException& e) {
                 auto resp = HttpResponse::newHttpResponse();
                 resp->setStatusCode(k500InternalServerError);
                 resp->setBody(e.base().what());
@@ -88,27 +89,35 @@ class TaskController : public HttpController<TaskController> {  // обеспе�
             callback(resp);
             return;
         }
+
         auto db = app().getDbClient();
-        auto mapper = db->mapper<drogon_model::Task>();
+        drogon::orm::Mapper<drogon_model::Task> mapper(db);
+
         mapper.findOne(
-            Criteria("id", CompareOperator::EQ, id),
+            drogon::orm::Criteria("id", drogon::orm::CompareOperator::EQ, id),
             [this, db, json, id, callback = std::move(callback)](drogon_model::Task task) {
                 if ((*json).isMember("title"))
                     task.title = (*json)["title"].asString();
                 if ((*json).isMember("completed"))
                     task.completed = (*json)["completed"].asBool();
-                auto mapper = db->mapper<drogon_model::Task>();
-                mapper.update(
+
+                drogon::orm::Mapper<drogon_model::Task> updateMapper(db);
+                updateMapper.update(
                     task,
                     [callback](const size_t count) {
-                        broadcastTasks();
+                        BroadcastTasks();
                         auto resp = HttpResponse::newHttpResponse();
                         resp->setStatusCode(count ? k200OK : k404NotFound);
                         callback(resp);
                     },
-                    [callback](const DrogonDbException& e) { ... });
+                    [callback](const drogon::orm::DrogonDbException& e) {
+                        auto resp = HttpResponse::newHttpResponse();
+                        resp->setStatusCode(k500InternalServerError);
+                        resp->setBody(e.base().what());
+                        callback(resp);
+                    });
             },
-            [callback](const DrogonDbException& e) {
+            [callback](const drogon::orm::DrogonDbException& e) {
                 auto resp = HttpResponse::newHttpResponse();
                 resp->setStatusCode(k404NotFound);
                 callback(resp);
@@ -117,15 +126,21 @@ class TaskController : public HttpController<TaskController> {  // обеспе�
 
     void deleteTask(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback, int id) {
         auto db = app().getDbClient();
-        auto mapper = db->mapper<drogon_model::Task>();
+        drogon::orm::Mapper<drogon_model::Task> mapper(db);
+
         mapper.deleteBy(
-            Criteria("id", CompareOperator::EQ, id),
+            drogon::orm::Criteria("id", drogon::orm::CompareOperator::EQ, id),
             [callback](const size_t count) {
-                broadcastTasks();
+                BroadcastTasks();
                 auto resp = HttpResponse::newHttpResponse();
                 resp->setStatusCode(count ? k204NoContent : k404NotFound);
                 callback(resp);
             },
-            [callback](const DrogonDbException& e) { ... });
+            [callback](const drogon::orm::DrogonDbException& e) {
+                auto resp = HttpResponse::newHttpResponse();
+                resp->setStatusCode(k500InternalServerError);
+                resp->setBody(e.base().what());
+                callback(resp);
+            });
     }
 };
