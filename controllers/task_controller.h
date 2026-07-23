@@ -1,6 +1,7 @@
 #pragma once
 
 #include <drogon/HttpController.h>
+
 #include <algorithm>
 
 #include "models/task.h"
@@ -20,7 +21,8 @@ class TaskController : public HttpController<TaskController> {
     void getTasks(const HttpRequestPtr&, std::function<void(const HttpResponsePtr&)>&& callback) {
         Json::Value json(Json::arrayValue);
         std::lock_guard<std::mutex> lock(task_store::mutex);
-        for (const auto& task : task_store::tasks) json.append(task.toJson());
+        for (const auto& task : task_store::tasks)
+            json.append(task.toJson());
         callback(HttpResponse::newHttpJsonResponse(json));
     }
 
@@ -52,15 +54,19 @@ class TaskController : public HttpController<TaskController> {
         {
             std::lock_guard<std::mutex> lock(task_store::mutex);
             for (auto& task : task_store::tasks) {
-                if (task.id != id) continue;
-                if ((*json)["title"].isString()) task.title = (*json)["title"].asString();
-                if ((*json)["completed"].isBool()) task.completed = (*json)["completed"].asBool();
+                if (task.id != id)
+                    continue;
+                if ((*json)["title"].isString())
+                    task.title = (*json)["title"].asString();
+                if ((*json)["completed"].isBool())
+                    task.completed = (*json)["completed"].asBool();
                 found = true;
                 break;
             }
         }
         respond(callback, found ? k200OK : k404NotFound);
-        if (found) BroadcastTasks();
+        if (found)
+            BroadcastTasks();
     }
 
     void deleteTask(const HttpRequestPtr&, std::function<void(const HttpResponsePtr&)>&& callback, int id) {
@@ -75,12 +81,12 @@ class TaskController : public HttpController<TaskController> {
             }
         }
         respond(callback, found ? k204NoContent : k404NotFound);
-        if (found) BroadcastTasks();
+        if (found)
+            BroadcastTasks();
     }
 
    private:
-    static void respond(const std::function<void(const HttpResponsePtr&)>& callback,
-                        HttpStatusCode status, const std::string& body = {}) {
+    static void respond(const std::function<void(const HttpResponsePtr&)>& callback, HttpStatusCode status, const std::string& body = {}) {
         auto response = HttpResponse::newHttpResponse();
         response->setStatusCode(status);
         response->setBody(body);
