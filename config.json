@@ -8,6 +8,7 @@
   ],
   "app": {
     "document_root": "./static",
+    "home_page": "index.html",
     "static_file_headers": [
       {"name": "Cache-Control", "value": "public, max-age=86400"}
     ]

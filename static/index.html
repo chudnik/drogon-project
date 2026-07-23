@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Drogon Tasks</title>
+  <style>
+    body {
+      max-width: 560px;
+      margin: 48px auto;
+      padding: 0 16px;
+      font-family: system-ui, sans-serif;
+      color: #202124;
+    }
+    h1 { margin-bottom: 8px; }
+    p { color: #666; }
+    form, li {
+      display: flex;
+      gap: 8px;
+    }
+    input, button {
+      padding: 10px;
+      font: inherit;
+    }
+    input[type="text"] {
+      flex: 1;
+    }
+    button {
+      cursor: pointer;
+    }
+    ul {
+      padding: 0;
+      list-style: none;
+    }
+    li {
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid #ddd;
+    }
+    li span {
+      flex: 1;
+    }
+    li.completed span {
+      color: #888;
+      text-decoration: line-through;
+    }
+    #message {
+      min-height: 24px;
+      color: #b00020;
+    }
+  </style>
+</head>
+<body>
+  <h1>Drogon Tasks</h1>
+  <p>Простой интерфейс для демонстрации REST API.</p>
+
+  <form id="task-form">
+    <input id="title" type="text" placeholder="Новая задача" required>
+    <button type="submit">Добавить</button>
+  </form>
+
+  <div id="message"></div>
+  <ul id="tasks"></ul>
+
+  <script>
+    const API = "/api/tasks";
+    const headers = {
+      "X-API-Key": "secret123",
+      "Content-Type": "application/json"
+    };
+
+    async function request(url, options = {}) {
+      const response = await fetch(url, {headers, ...options});
+      if (!response.ok) throw new Error(`Ошибка HTTP: ${response.status}`);
+      return response.status === 204 ? null : response.json();
+    }
+
+    async function loadTasks() {
+      try {
+        const tasks = await request(API);
+        const list = document.querySelector("#tasks");
+        list.replaceChildren(...tasks.map(task => {
+          const item = document.createElement("li");
+          item.className = task.completed ? "completed" : "";
+          item.innerHTML = `
+            <input type="checkbox" ${task.completed ? "checked" : ""}>
+            <span></span>
+            <button type="button">Удалить</button>
+          `;
+          item.querySelector("span").textContent = task.title;
+          item.querySelector("input").addEventListener("change", async event => {
+            await request(`${API}/${task.id}`, {
+              method: "PUT",
+              body: JSON.stringify({completed: event.target.checked})
+            });
+            loadTasks();
+          });
+          item.querySelector("button").addEventListener("click", async () => {
+            await request(`${API}/${task.id}`, {method: "DELETE"});
+            loadTasks();
+          });
+          return item;
+        }));
+        document.querySelector("#message").textContent =
+          tasks.length ? "" : "Список задач пуст";
+      } catch (error) {
+        document.querySelector("#message").textContent = error.message;
+      }
+    }
+
+    document.querySelector("#task-form").addEventListener("submit", async event => {
+      event.preventDefault();
+      const input = document.querySelector("#title");
+      try {
+        await request(API, {
+          method: "POST",
+          body: JSON.stringify({title: input.value})
+        });
+        input.value = "";
+        loadTasks();
+      } catch (error) {
+        document.querySelector("#message").textContent = error.message;
+      }
+    });
+
+    loadTasks();
+  </script>
+</body>
+</html>
