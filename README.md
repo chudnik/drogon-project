@@ -1,7 +1,11 @@
 # Drogon Task Manager
 
-Небольшой учебный проект для демонстрации возможностей веб-фреймворка
-[Drogon](https://github.com/drogonframework/drogon):
+![C++](https://img.shields.io/badge/C++-17-blue)
+![Drogon](https://img.shields.io/badge/Drogon-1.9-green)
+![CMake](https://img.shields.io/badge/CMake-3.16+-064F8C)
+
+Небольшое учебное приложение, демонстрирующее REST API,
+middleware, WebSocket и плагины веб-фреймворка Drogon.
 
 - REST API с методами `GET`, `POST`, `PUT` и `DELETE`;
 - получение и отправка JSON;
